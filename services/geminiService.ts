@@ -29,7 +29,8 @@ export const regenerateMedicationInfo = async (medName: string) => {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: `El usuario tiene un medicamento llamado "${medName}" pero le falta información detallada.
-      Genera la descripción, consejos y verifica el nombre correcto.
+      Genera la descripción y consejos.
+      IMPORTANTE: RESPONDE SIEMPRE EN ESPAÑOL (SPANISH).
       Responde SOLO JSON raw.`,
       config: {
         responseMimeType: "application/json",
@@ -70,6 +71,7 @@ export const parseMedicationInstruction = async (instruction: string, existingMe
       model: "gemini-2.5-flash",
       contents: `Analiza: "${instruction}". Contexto actual: [${existingList}].
       Si hay errores ortográficos, asume el medicamento más probable.
+      IMPORTANTE: RESPONDE SIEMPRE EN ESPAÑOL (SPANISH), aunque el medicamento tenga nombre en inglés.
       Responde SOLO el JSON raw, sin markdown.`,
       config: {
         responseMimeType: "application/json",
@@ -136,6 +138,7 @@ export const analyzeMedicationDetails = async (rawName: string, existingMeds: st
       1. ¿Es un medicamento/suplemento real? (isMedication).
       2. Corrige nombre y da detalles.
       3. Revisa cruces con: [${existingList}].
+      IMPORTANTE: RESPONDE SIEMPRE EN ESPAÑOL (SPANISH). La descripción y consejos deben estar en español.
       JSON raw solamente.`,
       config: {
         responseMimeType: "application/json",
@@ -186,7 +189,7 @@ export const analyzeHistory = async (logs: HistoryLog[]) => {
     const logsText = logs.map(l => `${l.medicationName}: ${l.takenAt}`).join('\n');
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Resumen motivacional breve (30 palabras) para paciente:\n${logsText}`,
+      contents: `Resumen motivacional breve (30 palabras) para paciente en ESPAÑOL:\n${logsText}`,
     });
     return response.text;
   } catch (error) {

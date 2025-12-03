@@ -78,6 +78,34 @@ const DEFAULT_MEDS: Medication[] = [];
 const DEFAULT_STATS: UserStats = { level: 1, currentPoints: 0, streakDays: 0, achievementsUnlocked: [] };
 const COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-rose-500', 'bg-amber-500', 'bg-violet-500'];
 
+// Sistema de Sonido (Beep simple usando AudioContext para no depender de archivos externos)
+const playNotificationSound = () => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    // Configuración del sonido (tipo "ding" agudo)
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime); // Nota A5
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); // Caída rápida
+    
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+  } catch (e) {
+    console.error("Error reproduciendo sonido", e);
+  }
+};
+
 const App: React.FC = () => {
   const [view, setView] = useState<View>('dashboard');
   
@@ -128,7 +156,9 @@ const App: React.FC = () => {
   // Notification State
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
-  const lastCheckRef = useRef<number>(Date.now());
+  
+  // Control para no repetir notificaciones demasiado seguido (mismo ID)
+  const lastNotifiedRef = useRef<Record<string, number>>({});
 
   // Persistence
   useEffect(() => { localStorage.setItem('medications', JSON.stringify(medications)); }, [medications]);
@@ -156,7 +186,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // Notifications Logic
+  // Notifications Logic (MEJORADO)
   useEffect(() => {
     if ('Notification' in window) {
       if (Notification.permission === 'granted') {
@@ -166,7 +196,7 @@ const App: React.FC = () => {
 
     const checkInterval = setInterval(() => {
       if (Notification.permission === 'granted') checkDueMedications();
-    }, 30000); // Check every 30s
+    }, 15000); // Check every 15s (más frecuente)
     return () => clearInterval(checkInterval);
   }, [medications]);
 
@@ -177,8 +207,9 @@ const App: React.FC = () => {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
         setNotificationsEnabled(true);
+        playNotificationSound(); // Test sound
         new Notification("MediRecordatorio", { 
-          body: "¡Configurado! Mantén la app en segundo plano para recibir alertas.", 
+          body: "¡Configurado! Escucharás un sonido y verás alertas.", 
           icon: "/icon.svg" 
         });
       }
@@ -189,22 +220,40 @@ const App: React.FC = () => {
 
   const checkDueMedications = () => {
     const now = new Date();
-    // Simple debounce to prevent double triggers in same minute
-    if (Date.now() - lastCheckRef.current < 20000) return;
     
     medications.forEach(med => {
       if (med.nextDose) {
         const doseTime = new Date(med.nextDose);
-        // Check if dose is due within last minute or future 1 minute
-        const diff = doseTime.getTime() - now.getTime();
-        if (Math.abs(diff) < 60000) { 
-             lastCheckRef.current = Date.now();
-             new Notification(`¡Hora de tu medicina!`, {
-                body: `Toma: ${med.name} (${med.dosage})`,
-                icon: "/icon.svg",
-                tag: med.id,
-                requireInteraction: true
-             });
+        const timeDiff = doseTime.getTime() - now.getTime();
+        
+        // Criterio: Si ya pasó la hora (hasta hace 30 min) O si falta menos de 1 minuto
+        // Y no hemos notificado en los últimos 5 minutos para este medicamento específico.
+        const isPastDue = timeDiff <= 0 && timeDiff > -1800000; // Pasó hace menos de 30 min
+        const isAboutTime = timeDiff > 0 && timeDiff < 60000; // Faltan menos de 60 seg
+        
+        if (isPastDue || isAboutTime) {
+           const lastNotified = lastNotifiedRef.current[med.id] || 0;
+           // Evitar spam: solo notificar cada 5 minutos si sigue pendiente
+           if (now.getTime() - lastNotified > 300000) { 
+               
+               lastNotifiedRef.current[med.id] = now.getTime();
+               
+               playNotificationSound();
+               
+               // Si la app está en primer plano o background, esto intenta llamar la atención
+               if (document.visibilityState === 'hidden') {
+                  new Notification(`¡Es hora de ${med.name}!`, {
+                    body: `Dosis: ${med.dosage}. Toca para registrar.`,
+                    icon: "/icon.svg",
+                    tag: med.id,
+                    requireInteraction: true,
+                    vibrate: [200, 100, 200]
+                 } as any);
+               } else {
+                 // Si está abierta, también podemos mostrar un Toast visual (opcional),
+                 // pero el sonido ya ayuda.
+               }
+           }
         }
       }
     });

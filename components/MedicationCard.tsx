@@ -8,7 +8,7 @@ interface MedicationCardProps {
   onDelete: (id: string) => void;
   onEdit: (med: Medication) => void;
   onSnooze: (id: string, minutes: number) => void;
-  onRegenerate: (id: string) => void; // Nueva prop
+  onRegenerate: (id: string) => void;
   theme: Theme;
 }
 
@@ -61,8 +61,16 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication, onTa
         <div className="flex-1 pr-2">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className={`text-lg font-bold leading-tight ${theme.classes.textMain}`}>{medication.name}</h3>
-            {lowStock && <span className="flex items-center gap-1 text-[10px] font-bold bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full border border-orange-500/20"><AlertTriangle size={10} /> {inventory}</span>}
-            {noStock && <span className="flex items-center gap-1 text-[10px] font-bold bg-red-500/10 text-red-500 px-2 py-0.5 rounded-full border border-red-500/20"><AlertCircle size={10} /> Agotado</span>}
+            
+            {/* Visualización del Stock SIEMPRE */}
+            <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+              noStock ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+              lowStock ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' :
+              isDark ? 'bg-white/10 text-slate-300 border-white/10' : 'bg-slate-100 text-slate-500 border-slate-200'
+            }`}>
+              {noStock ? <AlertCircle size={10} /> : <Package size={10} />}
+              {noStock ? 'Agotado' : `${inventory} und.`}
+            </span>
           </div>
           
           {/* Descripción con opción de reparación */}
